@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "ptHk/OEdpiM=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\XRay\\Desktop\\Projects\\C# learning\\2\\2.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\XRay\\.nuget\\packages\\microsoft.aspnetcore.openapi\\9.0.8\\microsoft.aspnetcore.openapi.9.0.8.nupkg.sha512",
+    "C:\\Users\\XRay\\.nuget\\packages\\microsoft.openapi\\1.6.17\\microsoft.openapi.1.6.17.nupkg.sha512"
+  ],
+  "logs": []
+}
