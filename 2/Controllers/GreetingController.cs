@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("fixed")]
 public class GreetingController : ControllerBase
 {
     [HttpGet]
@@ -15,4 +17,11 @@ public class GreetingController : ControllerBase
     {
         return Ok($"Hello, {name}");
     }
+
+    [HttpGet("/ping")]
+    public IActionResult PingPong()
+    {
+        return Ok("Pong");
+    }
+
 }

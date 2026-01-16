@@ -1,31 +1,37 @@
 using Microsoft.Extensions.Options;
+using FluentValidation;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
 
+builder.Services.AddControllers();
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-//Transient (every time when called, light services), Scoped (once for each request, db), Singelton (forever one, cache/config)
-builder.Services.AddScoped<IStockService, StockService>();
-builder.Services.AddTransient<IPriceProvider, RandomPriceProvider>();
 
-//AddScoped - Guid will be the same, AddTransient - Guid will be different, AddSingleton - Guid will be the same until you restart the server
-builder.Services.AddScoped<IGuidService, GuidService>(); 
-builder.Services.AddScoped<IHelperService, HelperService>();
+builder.Services.AddBusinessServices(builder.Configuration);
+builder.Services.AddAppRateLimiter();
+builder.Services.AddHealthChecks()
+    .AddUrlGroup(new Uri("https://api.marketdata.com/"), "External Market API");
 
-builder.Services.Configure<StockOptions>(builder.Configuration.GetSection(StockOptions.SectionName));
-builder.Services.Configure<WordsOptions>(builder.Configuration.GetSection(WordsOptions.SectionName));
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddValidatorsFromAssemblyContaining<StockPurchaseRequestValidator>();
+
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// 3. Конвейер (Pipeline)
 if (app.Environment.IsDevelopment())
 {
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
-
 
 app.Use(async (context, next) =>
 {
@@ -33,41 +39,45 @@ app.Use(async (context, next) =>
     await next();
     Console.WriteLine("Method: " + context.Request.Path + " Status: " + context.Response.StatusCode);
 });
-app.UseExceptionHandler("/error"); // ловит ошибки от всех кто дальше
-app.UseHttpsRedirection(); // перенаправляет на https
-app.Use(async (context, next) =>
-{
-    var options = context.RequestServices.GetRequiredService<IOptions<WordsOptions>>();
-    var restrictedWords = options.Value.RestrictedWords;
+app.UseExceptionHandler("/error");
+app.UseHttpsRedirection();
 
-    var path = context.Request.Path.Value?.ToLower() ?? "";
-    bool isForbidden = restrictedWords.Any(word => path.Contains(word.ToLower()));
+app.UseMiddleware<ForbiddenWordsMiddleware>();
 
-    if (isForbidden)
-    {
-        context.Response.StatusCode = 403;
-        await context.Response.WriteAsync("Access Denied!");
-    } 
-    else
-    {
-        await next();
-    }
-});
-app.UseStaticFiles(); // css
+app.UseStaticFiles();
 app.UseRouting();
-app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// app.Map("/ping", (appBranch) =>
-// {
-//     appBranch.Run(async (context) =>
-//     {
-//         await context.Response.WriteAsync("Pong");
-//     });
-// });
-app.MapGet("/ping", () => "Pong");
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            Status = report.Status.ToString(),
+            Checks = report.Entries.Select(x => new 
+            {
+                Component = x.Key,
+                Status = x.Value.Status.ToString(),
+                Description = x.Value.Description
+            }),
+            Duration = report.TotalDuration
+        };
+        await context.Response.WriteAsJsonAsync(response);
+    }
+});
 app.MapControllers();
 
-
 app.Run();
+
+
+
+
+public partial class Program
+{
+    
+}
