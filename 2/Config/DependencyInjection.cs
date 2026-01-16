@@ -8,6 +8,8 @@ public static class DependencyInjection
         services.Configure<StockOptions>(configuration.GetSection(StockOptions.SectionName));
         services.Configure<WordsOptions>(configuration.GetSection(WordsOptions.SectionName));
 
+        //db
+        services.AddScoped<IStockRepository, StockRepository>();
         
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
@@ -18,6 +20,7 @@ public static class DependencyInjection
         services.AddTransient<IPriceProvider, RandomPriceProvider>();
         services.AddScoped<IGuidService, GuidService>(); 
         services.AddScoped<IHelperService, HelperService>();
+        
 
         services.AddHttpClient<ExternalStockClient>(client =>
         {

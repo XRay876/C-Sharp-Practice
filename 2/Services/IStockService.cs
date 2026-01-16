@@ -10,4 +10,6 @@ public interface IStockService
     Task<StockDTO?> GetStock(string ticker);
     Task<StockPriceDTO?> GetStockPrice(string ticker);
     Task DeleteStock(string ticker);
+    Task EnsureTickerExists(string ticker);
+    Task<StockDTO?> GetStockByCompany(string companyName);
 }

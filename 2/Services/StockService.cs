@@ -6,9 +6,9 @@ using StockWatcher.Api.Entities;
 public class StockService : IStockService
 {
     private readonly ILogger<StockService> _logger;
-    private readonly AppDbContext _db;
+    private readonly IStockRepository _db;
 
-    public StockService(ILogger<StockService> logger, AppDbContext db)
+    public StockService(ILogger<StockService> logger, IStockRepository db)
     {
         _logger = logger;
         _db = db;
@@ -17,7 +17,7 @@ public class StockService : IStockService
     public async Task EnsureTickerExists(string ticker)
     {
 
-        var check = await _db.Stocks.AnyAsync(x => x.Ticker == ticker.ToUpper());
+        var check = await _db.GetAnyAsync(ticker);
         if (!check)
         {
             throw new StockNotFoundException(ticker);
@@ -26,7 +26,7 @@ public class StockService : IStockService
 
     public async Task<bool> IsStockExists(string ticker)
     {
-        var check = await _db.Stocks.AnyAsync(x => x.Ticker == ticker.ToUpper());
+        var check = await _db.GetAnyAsync(ticker);
         return check;
     }
 
@@ -61,7 +61,7 @@ public class StockService : IStockService
             // PriceHistory = [new StockPriceHistory{Price = price}]
         };
         newStock.PriceHistory.Add(new StockPriceHistory{Price = price});
-        _db.Stocks.Add(newStock);
+        await _db.AddAsync(newStock);
         await _db.SaveChangesAsync();
         _logger.LogInformation("Stock {Ticker} added to database", ticker);
     
@@ -72,9 +72,10 @@ public class StockService : IStockService
     {
         // var exists = await IsStockExists(ticker);
 
-        var stock = await _db.Stocks
-            .Include(s => s.PriceHistory) 
-            .FirstOrDefaultAsync(x => x.Ticker == ticker.ToUpper());
+        // var stock = await _db.Stocks
+        //     .Include(s => s.PriceHistory) 
+        //     .FirstOrDefaultAsync(x => x.Ticker == ticker.ToUpper());
+        var stock = await _db.GetByTickerAsync(ticker);
 
         if (stock == null)
         {
@@ -86,60 +87,46 @@ public class StockService : IStockService
         stock.PriceHistory.Add(new StockPriceHistory{Price = stock.Price});
         stock.Price = price;
         stock.LastUpdate = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-    
+        // await _db.SaveChangesAsync();
+
+        await _db.UpdateAsync(stock);
+        await _db.SaveChangesAsync();    
         
     }
 
     public async Task<List<StockDTO>> GetStocks()
     {
-        var allStocks = await _db.Stocks.Include(s=>s.PriceHistory).AsNoTracking().Select(s => new StockDTO{Ticker=s.Ticker, Price = s.Price, PriceHistory = s.PriceHistory.Select(ph => new StockPriceDTO{Price = ph.Price, changeDate = ph.ChangeDate}).ToList()}).ToListAsync();
-        return allStocks;
+        var allStocks = await _db.GetAllAsync();
+        return allStocks.Select(s=>s.ToDto()).ToList();
     }
 
     public async Task<StockDTO?> GetStock(string ticker)
     {
-        return await _db.Stocks
-            .AsNoTracking()
-            .Where(s => s.Ticker == ticker.ToUpper())
-            .Select(s => new StockDTO
-            {
-                Ticker = s.Ticker,
-                Price = s.Price,
-                PriceHistory = s.PriceHistory.Select(ph => new StockPriceDTO
-                {
-                    Price = ph.Price, 
-                    changeDate = ph.ChangeDate
-                }).ToList()
-            })
-            .FirstOrDefaultAsync();
+        var stock = await _db.GetByTickerAsync(ticker);
+        return stock?.ToDto();
     }
     
 
     public async Task<StockPriceDTO?> GetStockPrice(string ticker)
         {
-            return await _db.Stocks
-                .AsNoTracking()
-                .Where(s => s.Ticker == ticker.ToUpper())
-                .Select(s => new StockPriceDTO
-                {
-                    Price = s.Price,
-                    changeDate = s.LastUpdate
-                })
-                .FirstOrDefaultAsync();
-    }
+            return await _db.GetPriceOnlyAsync(ticker);
+        }
 
     public async Task DeleteStock(string ticker)
     {
-        var rowsAffected = await _db.Stocks
-            .Where(s => s.Ticker == ticker.ToUpper())
-            .ExecuteDeleteAsync();
+        var rowsAffected = await _db.DeleteByTickerAsync(ticker);
         
         if (rowsAffected < 1)
         {
             throw new StockNotFoundException(ticker);
         }
         
+    }
+
+    public async Task<StockDTO?> GetStockByCompany(string companyName)
+    {
+        var stock = await _db.GetStockByCompanyNameAsync(companyName);
+        return stock?.ToDto();
     }
     
 }
